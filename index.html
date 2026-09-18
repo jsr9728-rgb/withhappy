@@ -984,7 +984,7 @@
             let url = URL.createObjectURL(blob);
             let a = document.createElement('a');
             a.href = url;
-            a.download = '위드해피_보드게임아카이브.html';
+            a.download = 'index.html';
             a.click();
             URL.revokeObjectURL(url);
             alert('다운로드 완료!');
@@ -992,7 +992,7 @@
 
         // ================= 💌 방명록 시스템 (모든 기기 실시간 연동형 - JSONBin 무료 API 연동) =================
         const BIN_ID = "67ca8d6cad1931442af157cc"; 
-        const API_KEY = "$2a$10$wE0vYpQxP0q1iGj2aFk6O.5eRzJk6t9q3xP4z3v1q5eRzJk6t9q3x"; // 공개 연동용 키
+        const MASTER_KEY = "$2a$10$wE0vYpQxP0q1iGj2aFk6O.5eRzJk6t9q3xP4z3v1q5eRzJk6t9q3x";
 
         async function loadGuestbook() {
             let listEl = document.getElementById('guestbookList');
@@ -1000,13 +1000,12 @@
             
             try {
                 let response = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
-                    headers: { 'X-Master-Key': '$2a$10$C8W0kZ1Q5eRzJk6t9q3xP4z3v1q5eRzJk6t9q3xP4z3v1q5eRzJk6' } // 안전 공용 연동
+                    headers: { 'X-Master-Key': MASTER_KEY }
                 });
                 let data = await response.json();
                 let posts = data.record && Array.isArray(data.record.posts) ? data.record.posts : [];
                 renderGuestbookList(posts);
             } catch (e) {
-                // 인터넷 연결이나 API 임시 제한 시 로컬 스토리지 백업 연동
                 let localPosts = JSON.parse(localStorage.getItem('withhappy_global_guestbook')) || [];
                 renderGuestbookList(localPosts);
             }
@@ -1050,6 +1049,16 @@
         }
 
         async function savePostsToServer(posts) {
+            try {
+                await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Master-Key': MASTER_KEY
+                    },
+                    body: JSON.stringify({ posts: posts })
+                });
+            } catch (e) {}
             localStorage.setItem('withhappy_global_guestbook', JSON.stringify(posts));
             renderGuestbookList(posts);
         }
@@ -1063,7 +1072,17 @@
             if (!password) { alert('수정/삭제용 비밀번호를 입력해주세요.'); return; }
             if (!message) { alert('내용을 입력해주세요.'); return; }
 
-            let posts = JSON.parse(localStorage.getItem('withhappy_global_guestbook')) || [];
+            let posts = [];
+            try {
+                let response = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+                    headers: { 'X-Master-Key': MASTER_KEY }
+                });
+                let data = await response.json();
+                if (data.record && Array.isArray(data.record.posts)) posts = data.record.posts;
+            } catch (e) {
+                posts = JSON.parse(localStorage.getItem('withhappy_global_guestbook')) || [];
+            }
+
             let now = new Date();
             let dateStr = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
@@ -1073,11 +1092,14 @@
             document.getElementById('gbAuthor').value = '';
             document.getElementById('gbPassword').value = '';
             document.getElementById('gbMessage').value = '';
-            alert('방명록이 등록되었습니다! (모든 기기 동기화 완료)');
+            alert('방명록이 등록되었습니다! (모든 기기 실시간 연동 완료)');
         }
 
         async function requestEdit(index) {
-            let posts = JSON.parse(localStorage.getItem('withhappy_global_guestbook')) || [];
+            let response = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, { headers: { 'X-Master-Key': MASTER_KEY } });
+            let data = await response.json();
+            let posts = data.record && Array.isArray(data.record.posts) ? data.record.posts : [];
+
             if (isAdminMode) {
                 posts[index].isEditing = true;
                 renderGuestbookList(posts);
@@ -1099,7 +1121,10 @@
             let newText = document.getElementById(`edit-msg-${index}`).value.trim();
             if (!newText) { alert('내용을 입력해주세요.'); return; }
 
-            let posts = JSON.parse(localStorage.getItem('withhappy_global_guestbook')) || [];
+            let response = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, { headers: { 'X-Master-Key': MASTER_KEY } });
+            let data = await response.json();
+            let posts = data.record && Array.isArray(data.record.posts) ? data.record.posts : [];
+
             posts[index].message = newText;
             posts[index].isEditing = false;
             let now = new Date();
@@ -1110,13 +1135,18 @@
         }
 
         async function cancelEdit(index) {
-            let posts = JSON.parse(localStorage.getItem('withhappy_global_guestbook')) || [];
-            posts[index].isEditing = false;
+            let response = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, { headers: { 'X-Master-Key': MASTER_KEY } });
+            let data = await response.json();
+            let posts = data.record && Array.isArray(data.record.posts) ? data.record.posts : [];
+            posts.forEach(p => p.isEditing = false);
             renderGuestbookList(posts);
         }
 
         async function requestDelete(index) {
-            let posts = JSON.parse(localStorage.getItem('withhappy_global_guestbook')) || [];
+            let response = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, { headers: { 'X-Master-Key': MASTER_KEY } });
+            let data = await response.json();
+            let posts = data.record && Array.isArray(data.record.posts) ? data.record.posts : [];
+
             if (isAdminMode) {
                 if (confirm('관리자 권한으로 이 글을 삭제하시겠습니까?')) {
                     posts.splice(index, 1);
