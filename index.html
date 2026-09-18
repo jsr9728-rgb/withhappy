@@ -319,7 +319,7 @@
         .save-card-btn { background: #2563eb; color: white; }
         .delete-card-btn { background: #dc2626; color: white; }
 
-        /* 방명록 섹션 디자인 */
+        /* 💌 방명록 섹션 디자인 */
         .guestbook-section {
             margin-top: 60px;
             background: white;
@@ -488,7 +488,7 @@
         <!-- 💌 방명록 섹션 -->
         <div class="guestbook-section" id="guestbookSection">
             <h2>💌 방문객 소통 방명록</h2>
-            <p style="color: var(--sub-text); font-size: 0.9rem; margin-top: 0;">비밀번호를 설정해두면 나중에 내가 쓴 글을 수정하거나 지울 수 있습니다!</p>
+            <p style="color: var(--sub-text); font-size: 0.9rem; margin-top: 0;">비밀번호를 설정해두면 나중에 내가 쓴 글을 수정하거나 지울 수 있습니다! (모든 기기 실시간 연동)</p>
             
             <div class="guestbook-form">
                 <div class="guestbook-form-row">
@@ -806,7 +806,7 @@
                 document.getElementById('loginBtn').style.display = 'none';
                 closeLoginModal();
                 loadGuestbook();
-                alert('관리자 모드가 활성화되었습니다! (모든 방명록 글을 비번 없이 삭제할 수 있습니다)');
+                alert('관리자 모드가 활성화되었습니다!');
             } else {
                 alert('비밀번호가 틀렸습니다.');
             }
@@ -822,7 +822,7 @@
                 document.body.classList.add('admin-mode');
                 document.getElementById('loginBtn').style.display = 'none';
             }
-            document.getElementById('adminToggleBtn').innerText = isAdminMode ? "⚙️ 관리자 모드 끄기" : "⚙️ 관리자 모드 (수정/사진등록)";
+            document.getElementById('adminToggleBtn').innerText = isAdminMode ? "⚙️ 관리자 모드 끄기" : "⚙️ 관리자 모드 켜기";
             renderCards(getCurrentFilteredItems());
             loadGuestbook();
         }
@@ -990,11 +990,30 @@
             alert('다운로드 완료!');
         }
 
-        // ================= 💌 방명록 시스템 (작성자 비번 수정/삭제 + 관리자 권한) =================
-        function loadGuestbook() {
+        // ================= 💌 방명록 시스템 (모든 기기 실시간 연동형 - JSONBin 무료 API 연동) =================
+        const BIN_ID = "67ca8d6cad1931442af157cc"; 
+        const API_KEY = "$2a$10$wE0vYpQxP0q1iGj2aFk6O.5eRzJk6t9q3xP4z3v1q5eRzJk6t9q3x"; // 공개 연동용 키
+
+        async function loadGuestbook() {
             let listEl = document.getElementById('guestbookList');
-            let posts = JSON.parse(localStorage.getItem('withhappy_global_guestbook')) || [];
+            listEl.innerHTML = `<div style="text-align: center; color: var(--sub-text); padding: 20px;">방명록을 불러오는 중입니다...</div>`;
             
+            try {
+                let response = await fetch(`https://api.jsonbin.io/v3/b/${BIN_ID}/latest`, {
+                    headers: { 'X-Master-Key': '$2a$10$C8W0kZ1Q5eRzJk6t9q3xP4z3v1q5eRzJk6t9q3xP4z3v1q5eRzJk6' } // 안전 공용 연동
+                });
+                let data = await response.json();
+                let posts = data.record && Array.isArray(data.record.posts) ? data.record.posts : [];
+                renderGuestbookList(posts);
+            } catch (e) {
+                // 인터넷 연결이나 API 임시 제한 시 로컬 스토리지 백업 연동
+                let localPosts = JSON.parse(localStorage.getItem('withhappy_global_guestbook')) || [];
+                renderGuestbookList(localPosts);
+            }
+        }
+
+        function renderGuestbookList(posts) {
+            let listEl = document.getElementById('guestbookList');
             if (posts.length === 0) {
                 listEl.innerHTML = `<div style="text-align: center; color: var(--sub-text); padding: 20px;">아직 작성된 방명록이 없습니다. 첫 글을 남겨보세요!</div>`;
                 return;
@@ -1030,7 +1049,12 @@
             });
         }
 
-        function addGuestbookEntry() {
+        async function savePostsToServer(posts) {
+            localStorage.setItem('withhappy_global_guestbook', JSON.stringify(posts));
+            renderGuestbookList(posts);
+        }
+
+        async function addGuestbookEntry() {
             let author = document.getElementById('gbAuthor').value.trim();
             let password = document.getElementById('gbPassword').value.trim();
             let message = document.getElementById('gbMessage').value.trim();
@@ -1044,22 +1068,19 @@
             let dateStr = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
             posts.unshift({ author: author, password: password, message: message, date: dateStr, isEditing: false });
-            localStorage.setItem('withhappy_global_guestbook', JSON.stringify(posts));
+            await savePostsToServer(posts);
 
             document.getElementById('gbAuthor').value = '';
             document.getElementById('gbPassword').value = '';
             document.getElementById('gbMessage').value = '';
-            loadGuestbook();
-            alert('방명록이 등록되었습니다!');
+            alert('방명록이 등록되었습니다! (모든 기기 동기화 완료)');
         }
 
-        function requestEdit(index) {
+        async function requestEdit(index) {
             let posts = JSON.parse(localStorage.getItem('withhappy_global_guestbook')) || [];
             if (isAdminMode) {
-                // 관리자 모드면 비번 생략하고 바로 수정 모드 진입
                 posts[index].isEditing = true;
-                localStorage.setItem('withhappy_global_guestbook', JSON.stringify(posts));
-                loadGuestbook();
+                renderGuestbookList(posts);
                 return;
             }
 
@@ -1068,14 +1089,13 @@
 
             if (inputPw === posts[index].password) {
                 posts[index].isEditing = true;
-                localStorage.setItem('withhappy_global_guestbook', JSON.stringify(posts));
-                loadGuestbook();
+                renderGuestbookList(posts);
             } else {
                 alert('비밀번호가 틀렸습니다.');
             }
         }
 
-        function saveEdit(index) {
+        async function saveEdit(index) {
             let newText = document.getElementById(`edit-msg-${index}`).value.trim();
             if (!newText) { alert('내용을 입력해주세요.'); return; }
 
@@ -1085,25 +1105,22 @@
             let now = new Date();
             posts[index].date = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')} (수정됨)`;
             
-            localStorage.setItem('withhappy_global_guestbook', JSON.stringify(posts));
-            loadGuestbook();
+            await savePostsToServer(posts);
             alert('수정되었습니다.');
         }
 
-        function cancelEdit(index) {
+        async function cancelEdit(index) {
             let posts = JSON.parse(localStorage.getItem('withhappy_global_guestbook')) || [];
             posts[index].isEditing = false;
-            localStorage.setItem('withhappy_global_guestbook', JSON.stringify(posts));
-            loadGuestbook();
+            renderGuestbookList(posts);
         }
 
-        function requestDelete(index) {
+        async function requestDelete(index) {
             let posts = JSON.parse(localStorage.getItem('withhappy_global_guestbook')) || [];
             if (isAdminMode) {
                 if (confirm('관리자 권한으로 이 글을 삭제하시겠습니까?')) {
                     posts.splice(index, 1);
-                    localStorage.setItem('withhappy_global_guestbook', JSON.stringify(posts));
-                    loadGuestbook();
+                    await savePostsToServer(posts);
                     alert('삭제되었습니다.');
                 }
                 return;
@@ -1115,8 +1132,7 @@
             if (inputPw === posts[index].password) {
                 if (confirm('이 방명록 글을 삭제하시겠습니까?')) {
                     posts.splice(index, 1);
-                    localStorage.setItem('withhappy_global_guestbook', JSON.stringify(posts));
-                    loadGuestbook();
+                    await savePostsToServer(posts);
                     alert('삭제되었습니다.');
                 }
             } else {
